@@ -1,74 +1,62 @@
-# React + TypeScript + Vite
+# Netlify Todos
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack React + Netlify Functions demo that stores todos in a Neon/Postgres database through Prisma. This update adds email/password authentication with JSON Web Tokens (JWT) so each user sees only their own todos.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 20+
+- A Postgres database (Neon is a great free option)
+- Netlify CLI (optional but handy for local function testing)
 
-## React Compiler
+## Environment Variables
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Create a `.env` file (or configure these in Netlify) before running anything:
 
-## Expanding the ESLint configuration
+| Name | Description |
+| --- | --- |
+| `NETLIFY_DATABASE_URL` | Connection string to your Postgres database. Prisma uses this for migrations and Netlify Functions use it at runtime. |
+| `JWT_SECRET` | A long random string used to sign/verify JWTs. Keep it private. |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+> ⚠️ The new Prisma schema adds a `User` model and a `userId` foreign key on `Todo`. If you already had todos in the database, either back them up and re-create them per user or run a manual migration to populate `userId`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Installation & Local Development
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+# generate/update the Prisma client
+npm run postinstall
+# create the new tables/columns
+npx prisma migrate dev
+# start Vite + Netlify functions locally
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The React app now prompts for email/password. Registering hits `/.netlify/functions/register`, which stores the user with a bcrypt-hashed password and returns a JWT. Subsequent logins go through `/.netlify/functions/login`. The token is stored in `localStorage` and sent as a `Bearer` token for every todo request.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Netlify Functions
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-# netlify-todos
+| Function | Purpose |
+| --- | --- |
+| `register` | Creates a user, hashes their password, and returns a JWT + user object. |
+| `login` | Verifies credentials and returns a JWT + user object. |
+| `get-todos` | Requires a valid JWT, then returns todos scoped to the authenticated user. |
+| `create-todo` | Creates a todo for the authenticated user. |
+| `update-todo` | Ensures the todo belongs to the user before toggling completion. |
+| `delete-todo` | Ensures the todo belongs to the user before deleting. |
+
+All handlers share `lib/auth.ts`, which verifies/creates tokens and hashes passwords. If a request fails authentication they respond with `401 Unauthorized`.
+
+## Deployment Tips
+
+- Add `JWT_SECRET` and `NETLIFY_DATABASE_URL` to your Netlify environment variables.
+- Re-run `npx prisma migrate deploy` whenever the Prisma schema changes (e.g., in CI/CD).
+- Because every todo is tied to a user, the UI automatically scopes data per account.
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Starts Vite and proxies to local Netlify Functions. |
+| `npm run build` | Generates the Prisma client and builds the React app. |
+| `npm run preview` | Serves the production build locally. |
+| `npm run lint` | Runs ESLint. |

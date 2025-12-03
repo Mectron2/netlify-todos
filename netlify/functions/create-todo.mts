@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { prisma } from '../../lib/prisma';
+import { requireUser, UnauthorizedError } from '../../lib/auth';
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -7,6 +8,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
+        const user = requireUser(event);
         const { text } = JSON.parse(event.body || '{}');
 
         if (!text?.trim()) {
@@ -17,7 +19,7 @@ export const handler: Handler = async (event) => {
         }
 
         const todo = await prisma.todo.create({
-            data: { text: text.trim() }
+            data: { text: text.trim(), userId: user.id }
         });
 
         return {
@@ -26,6 +28,14 @@ export const handler: Handler = async (event) => {
             headers: { 'Content-Type': 'application/json' }
         };
     } catch (error) {
+        if (error instanceof UnauthorizedError) {
+            return {
+                statusCode: 401,
+                body: JSON.stringify({ error: 'Unauthorized' }),
+                headers: { 'Content-Type': 'application/json' }
+            };
+        }
+
         console.error('Database error:', error);
         return {
             statusCode: 500,
