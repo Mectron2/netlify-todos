@@ -439,7 +439,7 @@ export default function TodoApp() {
                                                 disabled:opacity-50"
                                             >
                                                 {todo.completed ? (
-                                                    <CheckCircle size={24} fill="currentColor" />
+                                                    <CheckCircle size={24} />
                                                 ) : (
                                                     <Circle size={24} />
                                                 )}
